@@ -1409,7 +1409,6 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
           {
             return -1;
           }
-
         agent->add_subscription (sub_id, sta_addr, statistic, static_cast<relation_t>(relation), value);
       }
 
