@@ -1,40 +1,24 @@
 
 
-#aaa
+aaa
 import sys
-#if (len(sys.argv) < 2):
-#    print 'Hardcoded parameters'
-#else:
-#    if (len(sys.argv) != 6):
-#        print 'Usage:'
-#        print 'ap-gen.py <AP_CHANNEL> <QUEUE_SIZE> <HW_ADDR> <ODIN_MASTER_IP> <ODIN_MASTER_PORT>'
-#        sys.exit(0)
 
-#AP_UNIQUE_IP_WITH_MASK = "172.17.2.53/24"
-AP_UNIQUE_IP_WITH_MASK = "172.16.250.175/24"
+if (len(sys.argv) != 6):
+    print 'Usage:'
+    print 'ap-gen.py <AP_CHANNEL> <QUEUE_SIZE> <HW_ADDR> <ODIN_MASTER_IP> <ODIN_MASTER_PORT>'
+    sys.exit(0)
 
-AP_UNIQUE_BSSID = "00-1B-B1-F2-EF-FE"
-
-#AP_CHANNEL = sys.argv[1]
-AP_CHANNEL = 6
-
-#QUEUE_SIZE = sys.argv[2]
-QUEUE_SIZE = 500
-
-#HW_ADDR = sys.argv[3]
-HW_ADDR = "10-0b-a9-f1-e0-60"
-
-#ODIN_MASTER_IP = sys.argv[4]
-ODIN_MASTER_IP = "172.16.250.170"
-
-#ODIN_MASTER_PORT = sys.argv[5]
-ODIN_MASTER_PORT = 2819
-
-#DEFAULT_CLIENT_MAC = "e8-39-df-4c-7c-ee"
-
+AP_UNIQUE_IP_WITH_MASK = "172.17.2.53/24"
+AP_UNIQUE_BSSID = "00-1B-B1-F2-EF-Fe"
+AP_CHANNEL = sys.argv[1]
+QUEUE_SIZE = sys.argv[2]
+HW_ADDR = sys.argv[3]
+ODIN_MASTER_IP = sys.argv[4]
+ODIN_MASTER_PORT = sys.argv[5]
+DEFAULT_CLIENT_MAC = "e8-39-df-4c-7c-ee"
 
 print '''
-odinagent::OdinAgent(%s, RT rates, CHANNEL %s, DEFAULT_GW 172.16.250.1, DEBUGFS /home/fran/bisdn/click/debugfs)
+odinagent::OdinAgent(%s, RT rates, CHANNEL %s, DEFAULT_GW 172.17.2.53)
 TimedSource(2, "ping\n")->  odinsocket::Socket(UDP, %s, %s, CLIENT true)
 ''' % (HW_ADDR, AP_CHANNEL, ODIN_MASTER_IP, ODIN_MASTER_PORT)
 
@@ -51,7 +35,7 @@ chatter :: ChatterSocket("TCP", 6778);
 // ----------------Packets going down
 FromHost(ap, HEADROOM 50)
   -> fhcl :: Classifier(12/0806 20/0001, -)
-  -> fh_arpr :: ARPResponder(172.17.250.170 98:d6:f7:67:6b:ee) // Resolve STA's ARP
+  -> fh_arpr :: ARPResponder(172.17.2.51 e8:39:df:4c:7c:e3) // Resolve STA's ARP
   -> ARPPrint("Resolving client's ARP by myself")
   -> ToHost(ap)
 '''
@@ -98,7 +82,7 @@ odinagent[1]
   -> decap :: WifiDecap()
   -> RXStats
   -> arp_c :: Classifier(12/0806 20/0001, -)
-  -> arp_resp::ARPResponder (172.16.250.170 00-1B-B3-67-6B-EE) // ARP fast path for STA
+  -> arp_resp::ARPResponder (172.17.2.53 00-1B-B1-F2-EF-F1) // ARP fast path for STA
   -> [1]odinagent
 
 

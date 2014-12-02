@@ -25,10 +25,6 @@
 #include <clicknet/ether.h>
 #include <clicknet/llc.h>
 #include "odinagent.hh"
-#include <iostream>
-#include <fstream>
-#include <sstream>
-
 
 CLICK_DECLS
 
@@ -40,7 +36,7 @@ OdinAgent::OdinAgent()
   _num_mean(0),
   _m2(0),
   _signal_offset(0),
-  _debug(false),
+  _debug(true), //false
   _rtable(0),
   _associd(0),
   _beacon_timer(this),
@@ -208,6 +204,8 @@ OdinAgent::add_vap (EtherAddress sta_mac, IPAddress sta_ip, EtherAddress sta_bss
     _packet_buffer.erase(it.key());
   }
 
+  //fprintf(stderr, "* Lvap added *\n");
+
   return 0;
 }
 
@@ -223,7 +221,7 @@ int
 OdinAgent::set_vap (EtherAddress sta_mac, IPAddress sta_ip, EtherAddress sta_bssid, Vector<String> vap_ssids)
 {
   if (_debug) {
-    fprintf(stderr, "set_vap (%s, %s, %s, %s)\n", sta_mac.unparse_colon().c_str()
+    fprintf(stderr, "set_lvap (%s, %s, %s, %s)\n", sta_mac.unparse_colon().c_str()
                                                 , sta_ip.unparse().c_str()
                                                 , sta_bssid.unparse().c_str()
                                                 , vap_ssids[0].c_str());
@@ -250,6 +248,8 @@ OdinAgent::set_vap (EtherAddress sta_mac, IPAddress sta_ip, EtherAddress sta_bss
 
   compute_bssid_mask();
 
+  //fprintf(stderr, "* Lvap set *\n");
+
   return 0;
 }
 
@@ -262,7 +262,7 @@ int
 OdinAgent::remove_vap (EtherAddress sta_mac)
 {
   if (_debug) {
-    fprintf(stderr, "remove_vap (%s)\n", sta_mac.unparse_colon().c_str());
+    fprintf(stderr, "remove_lvap (%s)\n", sta_mac.unparse_colon().c_str());
   }
 
   HashTable<EtherAddress, OdinStationState>::iterator it = _sta_mapping_table.find (sta_mac);
@@ -287,6 +287,8 @@ OdinAgent::remove_vap (EtherAddress sta_mac)
     _beacon_timer.unschedule();
   }
 
+  //fprintf(stderr, "* Lvap removed *\n");
+
   return 0;
 }
 
@@ -301,6 +303,7 @@ void
 OdinAgent::recv_probe_request (Packet *p)
 {
 
+  //fprintf(stderr, "Inside recv_probe_request\n");
   struct click_wifi *w = (struct click_wifi *) p->data();
   uint8_t *ptr;
 
@@ -340,6 +343,7 @@ OdinAgent::recv_probe_request (Packet *p)
     String payload = sa.take_string();
     WritablePacket *odin_probe_packet = Packet::make(Packet::default_headroom, payload.data(), payload.length(), 0);
     output(3).push(odin_probe_packet);
+    //fprintf(stderr, "Received probe request, message sent to the controller...\n");
     _packet_buffer.set (src, ssid);
     p->kill();
     return;
@@ -362,6 +366,7 @@ OdinAgent::recv_probe_request (Packet *p)
   if (ssid != "") {
     for (int i = 0; i < oss._vap_ssids.size(); i++) {
       if (oss._vap_ssids[i] == ssid) {
+        //fprintf(stderr, "Received probe request, sending beacon...\n");
         send_beacon(src, oss._vap_bssid, ssid, true);
         break;
       }
@@ -534,6 +539,8 @@ OdinAgent::send_beacon (EtherAddress dst, EtherAddress bssid, String my_ssid, bo
  */
 void
 OdinAgent::recv_assoc_request (Packet *p) {
+  //fprintf(stderr, "Inside recv_assoc_request\n");
+
   struct click_wifi *w = (struct click_wifi *) p->data();
 
   EtherAddress dst = EtherAddress(w->i_addr1);
@@ -613,6 +620,7 @@ OdinAgent::recv_assoc_request (Packet *p) {
   }
 
   uint16_t associd = 0xc000 | _associd++;
+  fprintf(stderr, "AP Received -> association request\n");
 
   send_assoc_response(src, WIFI_STATUS_SUCCESS, associd);
   p->kill();
@@ -710,6 +718,8 @@ OdinAgent::send_assoc_response (EtherAddress dst, uint16_t status, uint16_t asso
   p->take(max_len - actual_length);
 
   output(0).push(p);
+  fprintf(stderr, "AP Sent -> Association response\n");
+
 }
 
 
@@ -721,6 +731,8 @@ OdinAgent::send_assoc_response (EtherAddress dst, uint16_t status, uint16_t asso
  */
 void
 OdinAgent::recv_open_auth_request (Packet *p) {
+  //fprintf(stderr, "Inside recv_auth_request\n");
+
   struct click_wifi *w = (struct click_wifi *) p->data();
 
   uint8_t *ptr;
@@ -765,6 +777,7 @@ OdinAgent::recv_open_auth_request (Packet *p) {
     return;
   }
 
+  fprintf(stderr, "AP Received -> Authentication request\n");
   send_open_auth_response(src, 2, WIFI_STATUS_SUCCESS);
 
   p->kill();
@@ -821,6 +834,7 @@ OdinAgent::send_open_auth_response (EtherAddress dst, uint16_t seq, uint16_t sta
   ptr += 2;
 
   output(0).push(p);
+  fprintf(stderr, "AP Sent -> Authentication response\n");
 }
 
 
@@ -907,6 +921,13 @@ OdinAgent::update_rx_stats(Packet *p)
   stat._signal = ceh->rssi + _signal_offset;
   stat._packets++;
   stat._last_received.assign_now();
+
+  if(_debug){
+        FILE * fp;
+        fp = fopen ("/root/spring/shared/updated_stats.txt", "w");
+        fprintf(fp, "* update_rx_stats: src = %s, rate = %i, noise = %i, signal = %i (%i dBm)\n", src.unparse_colon().c_str(), stat._rate, stat._noise, stat._signal, (stat._signal - 128)*-1); //-(value - 128)
+        fclose(fp);
+  }
 
   match_against_subscriptions(stat, src);
 
@@ -1073,12 +1094,17 @@ OdinAgent::add_subscription (long subscription_id, EtherAddress addr, String sta
   sub.rel = r;
   sub.val = val;
   _subscription_list.push_back (sub);
+
+  fprintf(stderr, "* Subscription added *\n");
+
 }
 
 void
 OdinAgent::clear_subscriptions ()
 {
   _subscription_list.clear();
+  fprintf(stderr, "* Subscriptions cleared *\n");
+
 }
 
 void
@@ -1244,28 +1270,6 @@ OdinAgent::read_handler(Element *e, void *user_data)
       sa << agent->_mean <<  " " <<  agent->_num_mean << " " << variance << "\n";
       break;
     }
-    case handler_spectral_scan: {
-      // reads spectral scan
-
-      FILE *in;
-      if (!(in = popen("/root/scan","r"))) {
-        fprintf(stderr, "popen() failed\n");
-      }
-
-      pclose(in);
-
-      // read file and return big_string
-      std::ifstream in_file("/tmp/spectral_scan");
-      if (!in_file.is_open()){
-        fprintf(stderr, "Could not open /tmp/spectral_scan\n");
-        return "";
-      }
-      std::stringstream buffer;
-      buffer << in_file.rdbuf();
-      sa << buffer.str().c_str();
-
-      break;
-    }
   }
 
   return sa.take_string();
@@ -1409,7 +1413,10 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
           {
             return -1;
           }
+
         agent->add_subscription (sub_id, sta_addr, statistic, static_cast<relation_t>(relation), value);
+        //fprintf(stderr, "Subscription: %ld %s %s %i %f\n", sub_id, sta_addr.unparse_colon().c_str(), statistic.c_str(), relation, value);
+
       }
 
       if (args.complete() < 0) {
@@ -1526,27 +1533,6 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
       agent->_signal_offset = value;
       break;
     }
-    case handler_spectral_scan: {
-      // - First write 'chanscan' to debugfs_file
-      // - Perform iw dev scan0 scan
-      // - We write 'disable' to the file only upon reading
-      FILE *spectral_scan_ctl_file = fopen ("/sys/kernel/debug/ieee80211/phy1/ath9k/spectral_scan_ctl","w");
-
-      if (!spectral_scan_ctl_file) {
-        fprintf(stderr, "Could not open spectral_scan_ctl file\n");
-        return -1;
-      }
-
-      fprintf(spectral_scan_ctl_file, "chanscan");
-      fclose (spectral_scan_ctl_file);
-
-      FILE *in;
-      if (!(in = popen("iw dev scan0 scan > /dev/null","r"))) {
-        fprintf(stderr, "popen() failed\n");
-      }
-
-      pclose(in);
-    }
   }
   return 0;
 }
@@ -1562,7 +1548,6 @@ OdinAgent::add_handlers()
   add_read_handler("subscriptions", read_handler, handler_subscriptions);
   add_read_handler("debug", read_handler, handler_debug);
   add_read_handler("report_mean", read_handler, handler_report_mean);
-  add_read_handler("spectral_scan", read_handler, handler_spectral_scan);
 
   add_write_handler("add_vap", write_handler, handler_add_vap);
   add_write_handler("set_vap", write_handler, handler_set_vap);
@@ -1575,7 +1560,6 @@ OdinAgent::add_handlers()
   add_write_handler("testing_send_probe_request", write_handler, handler_probe_request);
   add_write_handler("handler_update_signal_strength", write_handler, handler_update_signal_strength);
   add_write_handler("signal_strength_offset", write_handler, handler_signal_strength_offset);
-  add_write_handler("spectral_scan", write_handler, handler_spectral_scan);
 }
 
 
@@ -1606,6 +1590,7 @@ cleanup_lvap (Timer *timer, void *data)
 
   agent->_packet_buffer.clear();
   timer->reschedule_after_sec(50);
+
 }
 
 
