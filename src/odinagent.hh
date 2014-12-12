@@ -84,6 +84,7 @@ public:
   // Methods to handle and send
   // 802.11 management messages
   void recv_probe_request (Packet *p);
+  void recv_deauth (Packet *p);
   void send_beacon (EtherAddress dst, EtherAddress bssid, String my_ssid, bool probe);
   void recv_assoc_request (Packet *p);
   void send_assoc_response (EtherAddress, uint16_t status, uint16_t associd);
@@ -118,8 +119,8 @@ public:
     handler_subscriptions,
     handler_debug,
     handler_probe_response,
-    handler_probe_request, 
-    handler_report_mean, 
+    handler_probe_request,
+    handler_report_mean,
     handler_update_signal_strength,
     handler_signal_strength_offset,
   };

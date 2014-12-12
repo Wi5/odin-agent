@@ -294,6 +294,57 @@ OdinAgent::remove_vap (EtherAddress sta_mac)
 
 
 /**
+* Receive a deauthentication packet
+*/
+void
+OdinAgent::recv_deauth (Packet *p) {
+        fprintf(stderr, "Inside recv_deauth\n");
+
+        struct click_wifi *w = (struct click_wifi *) p->data();
+        uint8_t *ptr;
+        ptr = (uint8_t *) p->data() + sizeof(struct click_wifi);
+
+        /*uint16_t algo = le16_to_cpu(*(uint16_t *) ptr);
+        ptr += 2;
+
+        uint16_t seq = le16_to_cpu(*(uint16_t *) ptr);
+        ptr += 2;
+
+        uint16_t status = le16_to_cpu(*(uint16_t *) ptr);
+        ptr += 2;
+*/
+        EtherAddress src = EtherAddress(w->i_addr2);
+
+        //If we're not aware of this LVAP, ignore
+        if (_sta_mapping_table.find(src) == _sta_mapping_table.end()) {
+                p->kill();
+                return;
+        }
+/*
+        if (algo != WIFI_FC0_SUBTYPE_DEAUTH) {
+                // click_chatter("%{element}: auth %d from %s not supported\n",
+                // this,
+                // algo,
+                // src.unparse().c_str());
+                p->kill();
+                return;
+        }
+*/
+        fprintf(stderr, "AP Received -> Deauthentication\n");
+        // Notify the master
+        StringAccum sa;
+        sa << "deauthentication " << src.unparse_colon().c_str() << "\n";
+
+        String payload = sa.take_string();
+        WritablePacket *odin_disconnect_packet = Packet::make(Packet::default_headroom, payload.data(), payload.length(), 0);
+        output(3).push(odin_disconnect_packet);
+
+        p->kill();
+        return;
+}
+
+
+/**
  * Handle a probe request. This code is
  * borrowed from the ProbeResponder element
  * and is modified to retrieve the BSSID/SSID
@@ -343,7 +394,8 @@ OdinAgent::recv_probe_request (Packet *p)
     String payload = sa.take_string();
     WritablePacket *odin_probe_packet = Packet::make(Packet::default_headroom, payload.data(), payload.length(), 0);
     output(3).push(odin_probe_packet);
-    //fprintf(stderr, "Received probe request, message sent to the controller...\n");
+    if(_debug)
+            fprintf(stderr, "Received probe request: not aware of this LVAP -> probe req sent to the controller\n");
     _packet_buffer.set (src, ssid);
     p->kill();
     return;
@@ -921,14 +973,14 @@ OdinAgent::update_rx_stats(Packet *p)
   stat._signal = ceh->rssi + _signal_offset;
   stat._packets++;
   stat._last_received.assign_now();
-
+/*
   if(_debug){
         FILE * fp;
         fp = fopen ("/root/spring/shared/updated_stats.txt", "w");
         fprintf(fp, "* update_rx_stats: src = %s, rate = %i, noise = %i, signal = %i (%i dBm)\n", src.unparse_colon().c_str(), stat._rate, stat._noise, stat._signal, (stat._signal - 128)*-1); //-(value - 128)
         fclose(fp);
   }
-
+*/
   match_against_subscriptions(stat, src);
 
   _rx_stats.set (src, stat);
@@ -1014,6 +1066,11 @@ OdinAgent::push(int port, Packet *p)
           {
             recv_open_auth_request (p);
             return;
+          }
+          case WIFI_FC0_SUBTYPE_DEAUTH:
+          {
+             recv_deauth (p);
+             return;
           }
         default:
           {
@@ -1562,10 +1619,11 @@ OdinAgent::add_handlers()
   add_write_handler("signal_strength_offset", write_handler, handler_signal_strength_offset);
 }
 
-
+/* This function erases the rx_stats of old clients */
 void
 cleanup_lvap (Timer *timer, void *data)
 {
+
   OdinAgent *agent = (OdinAgent *) data;
 
   Vector<EtherAddress> buf;
@@ -1585,6 +1643,7 @@ cleanup_lvap (Timer *timer, void *data)
 
   for (Vector<EtherAddress>::const_iterator iter = buf.begin(); iter != buf.end(); iter++)
   {
+    fprintf(stderr, "cleanup_lvap -> cleaning starts from agent with MAC addr: %s\n", iter->unparse_colon().c_str());          
     agent->_rx_stats.erase (*iter);
   }
 
