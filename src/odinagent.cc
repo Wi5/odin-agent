@@ -898,6 +898,14 @@ OdinAgent::send_assoc_response (EtherAddress dst, uint16_t status, uint16_t asso
   output(0).push(p);
   fprintf(stderr, "STA <---- AP (Assoc response)\n");
 
+  //Notify the master that a client has completed the auth/assoc procedure so it can stop the timer and prevent it from removing the lvap
+  StringAccum sa;
+  sa << "association " << dst.unparse_colon().c_str() << "\n";
+
+  String payload = sa.take_string();
+  WritablePacket *odin_association_packet = Packet::make(Packet::default_headroom, payload.data(), payload.length(), 0);
+  output(3).push(odin_association_packet);
+
 }
 
 /**
@@ -1636,7 +1644,7 @@ OdinAgent::print_stations_state()
 {
 
     fprintf(stderr,"\n*** Periodic report ***\n");
-    fprintf(stderr,"    Stations associated (%lu):\n", _sta_mapping_table.size());
+    fprintf(stderr,"    Number of stations associated = %lu:\n", _sta_mapping_table.size());
 
     if(_sta_mapping_table.size() != 0){
 
@@ -1645,11 +1653,26 @@ OdinAgent::print_stations_state()
             = _sta_mapping_table.begin(); it.live(); it++){
 
                 for (int i = 0; i < it.value()._vap_ssids.size (); i++) {
-                    fprintf(stderr,"        Station -> %s\n", (it.value()._vap_bssid).unparse_colon().c_str());
+                    fprintf(stderr,"        Station -> BSSID: %s\n", (it.value()._vap_bssid).unparse_colon().c_str());
+                    //fprintf(stderr,"                -> IP addr: %s\n", it.value()._sta_ip_addr_v4.unparse().c_str());
                 }
+        }
+
+        //stats
+        for (HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter = _rx_stats.begin();
+        iter.live(); iter++){
+
+            //Print info from our stations
+            if(_sta_mapping_table.find(iter.key()) != _sta_mapping_table.end()){
+                fprintf(stderr,"                -> rate: %i\n", (iter.value()._rate));
+                fprintf(stderr,"                -> noise: %i\n", (iter.value()._noise));
+                fprintf(stderr,"                -> signal: %i (-%i dBm)\n", (iter.value()._signal), (iter.value()._signal) - 128);
+                fprintf(stderr,"                -> packets: %i\n", (iter.value()._packets));
+                //fprintf(stderr,"                -> last heard: %i:%i:%i\n", (iter.value()._last_received).hour(), (iter.value()._last_received).minute(), (iter.value()._last_received).second());
+
             }
-    }else{
-        fprintf(stderr,"        No stations associated yet\n");
+        }
+
     }
 
 }
@@ -1660,9 +1683,8 @@ cleanup_lvap (Timer *timer, void *data)
 {
 
     OdinAgent *agent = (OdinAgent *) data;
-
     Vector<EtherAddress> buf;
-
+    
     // Clear out old rxstat entries.
     for (HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter = agent->_rx_stats.begin();
     iter.live(); iter++){
@@ -1687,7 +1709,7 @@ cleanup_lvap (Timer *timer, void *data)
         }
     }
 
-    fprintf(stderr,"\nCleaning old info in lvaps from:\n");
+    fprintf(stderr,"\nCleaning old info from:\n");
 
     for (Vector<EtherAddress>::const_iterator iter = buf.begin(); iter != buf.end(); iter++){
 
