@@ -173,6 +173,10 @@ OdinAgent::add_vap (EtherAddress sta_mac, IPAddress sta_ip, EtherAddress sta_bss
     return -1;
   }
 
+  if (_debug) {
+      fprintf(stderr, "add_lvap %s\n", sta_mac.unparse_colon().c_str());
+  }
+
   OdinStationState state;
   state._vap_bssid = sta_bssid;
   state._sta_ip_addr_v4 = sta_ip;
@@ -351,6 +355,9 @@ OdinAgent::recv_deauth (Packet *p) {
         output(3).push(odin_disconnect_packet);
 
         p->kill();
+
+        print_stations_state();
+
         return;
 }
 
@@ -606,12 +613,8 @@ OdinAgent::recv_open_auth_request (Packet *p) {
     //fprintf(stderr, "Inside recv_auth_request\n");
 
     struct click_wifi *w = (struct click_wifi *) p->data();
-
     uint8_t *ptr;
-
     ptr = (uint8_t *) p->data() + sizeof(struct click_wifi);
-
-
 
     uint16_t algo = le16_to_cpu(*(uint16_t *) ptr);
     ptr += 2;
@@ -622,8 +625,8 @@ OdinAgent::recv_open_auth_request (Packet *p) {
     uint16_t status = le16_to_cpu(*(uint16_t *) ptr);
     ptr += 2;
 
-
     EtherAddress src = EtherAddress(w->i_addr2);
+    EtherAddress dst = EtherAddress(w->i_addr1);
 
     //If we're not aware of this LVAP, ignore
     if (_sta_mapping_table.find(src) == _sta_mapping_table.end()) {
@@ -649,7 +652,7 @@ OdinAgent::recv_open_auth_request (Packet *p) {
         return;
     }
 
-    fprintf(stderr, "STA ----> AP (OpenAuth request)\n");
+    fprintf(stderr, "(OpenAuth request)     STA (%s) ----> AP (%s)\n", src.unparse_colon().c_str(), dst.unparse_colon().c_str());
     send_open_auth_response(src, 2, WIFI_STATUS_SUCCESS);
 
     p->kill();
@@ -688,6 +691,7 @@ OdinAgent::send_open_auth_response (EtherAddress dst, uint16_t seq, uint16_t sta
         memcpy(w->i_addr2, oss._vap_bssid.data(), 6);
         memcpy(w->i_addr3, oss._vap_bssid.data(), 6);
 
+        EtherAddress src = EtherAddress(w->i_addr2);
 
         w->i_dur = 0;
         w->i_seq = 0;
@@ -706,7 +710,8 @@ OdinAgent::send_open_auth_response (EtherAddress dst, uint16_t seq, uint16_t sta
         ptr += 2;
 
         output(0).push(p);
-        fprintf(stderr, "STA <---- AP (OpenAuth response)\n");
+
+        fprintf(stderr, "(OpenAuth response)    STA (%s) <---- AP (%s)\n", dst.unparse_colon().c_str(), src.unparse_colon().c_str());
     }
 
 /**
@@ -798,7 +803,7 @@ OdinAgent::recv_assoc_request (Packet *p) {
   }
 
   uint16_t associd = 0xc000 | _associd++;
-  fprintf(stderr, "STA ----> AP (Assoc request)\n");
+  fprintf(stderr, "(Association request)  STA (%s) ----> AP (%s)\n", src.unparse_colon().c_str(), dst.unparse_colon().c_str());
 
   send_assoc_response(src, WIFI_STATUS_SUCCESS, associd);
   p->kill();
@@ -839,6 +844,7 @@ OdinAgent::send_assoc_response (EtherAddress dst, uint16_t status, uint16_t asso
   memcpy(w->i_addr2, bssid.data(), 6);
   memcpy(w->i_addr3, bssid.data(), 6);
 
+  EtherAddress src = EtherAddress(w->i_addr2);
 
   w->i_dur = 0;
   w->i_seq = 0;
@@ -896,7 +902,7 @@ OdinAgent::send_assoc_response (EtherAddress dst, uint16_t status, uint16_t asso
   p->take(max_len - actual_length);
 
   output(0).push(p);
-  fprintf(stderr, "STA <---- AP (Assoc response)\n");
+  fprintf(stderr, "(Association response) STA (%s) <---- AP (%s)\n", dst.unparse_colon().c_str(), src.unparse_colon().c_str());
 
   //Notify the master that a client has completed the auth/assoc procedure so it can stop the timer and prevent it from removing the lvap
   StringAccum sa;
@@ -905,6 +911,9 @@ OdinAgent::send_assoc_response (EtherAddress dst, uint16_t status, uint16_t asso
   String payload = sa.take_string();
   WritablePacket *odin_association_packet = Packet::make(Packet::default_headroom, payload.data(), payload.length(), 0);
   output(3).push(odin_association_packet);
+
+  //print_stations_state();
+
 
 }
 
@@ -1668,8 +1677,7 @@ OdinAgent::print_stations_state()
                 fprintf(stderr,"                -> noise: %i\n", (iter.value()._noise));
                 fprintf(stderr,"                -> signal: %i (-%i dBm)\n", (iter.value()._signal), (iter.value()._signal) - 128);
                 fprintf(stderr,"                -> packets: %i\n", (iter.value()._packets));
-                //fprintf(stderr,"                -> last heard: %i:%i:%i\n", (iter.value()._last_received).hour(), (iter.value()._last_received).minute(), (iter.value()._last_received).second());
-
+                fprintf(stderr,"                -> last heard: %d.%06d \n", (iter.value()._last_received).sec(), (iter.value()._last_received).subsec());
             }
         }
 
@@ -1684,7 +1692,7 @@ cleanup_lvap (Timer *timer, void *data)
 
     OdinAgent *agent = (OdinAgent *) data;
     Vector<EtherAddress> buf;
-    
+
     // Clear out old rxstat entries.
     for (HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter = agent->_rx_stats.begin();
     iter.live(); iter++){
