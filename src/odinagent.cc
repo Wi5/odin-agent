@@ -2188,7 +2188,7 @@ OdinAgent::match_against_subscriptions(StationStats stats, EtherAddress src)
 
 
 /*
- * We have include new handlers an modified others
+ * We have included new handlers an modified others
  *
  * @author Luis Sequeira <sequeira@unizar.es>
  *
@@ -2205,17 +2205,18 @@ OdinAgent::read_handler(Element *e, void *user_data)
     case handler_view_mapping_table: {
       for (HashTable<EtherAddress, OdinStationState>::iterator it
           = agent->_sta_mapping_table.begin(); it.live(); it++)
+      {
+        sa << it.key().unparse_colon()
+           << " " << it.value()._sta_ip_addr_v4
+           <<  " " << it.value()._vap_bssid.unparse_colon();
+
+        for (int i = 0; i < it.value()._vap_ssids.size(); i++)
         {
-          sa << it.key().unparse_colon()
-            << " " << it.value()._sta_ip_addr_v4
-            <<  " " << it.value()._vap_bssid.unparse_colon();
-
-          for (int i = 0; i < it.value()._vap_ssids.size(); i++) {
-            sa << " " << it.value()._vap_ssids[i];
-          }
-
-          sa << "\n";
+          sa << " " << it.value()._vap_ssids[i];
         }
+
+        sa << "\n";
+      }
       break;
     }
 
@@ -2234,36 +2235,35 @@ OdinAgent::read_handler(Element *e, void *user_data)
     // read handler for transmission statistics
     case handler_txstat: {
 
-    OdinAgent::StationStats reset_stats = OdinAgent::StationStats();
-    Timestamp stats_time;
+      OdinAgent::StationStats reset_stats = OdinAgent::StationStats();
+      Timestamp stats_time;
 
       // the controller will get the tx statistics of all the STAs associated to this AP
       //TODO: we could perhaps add another handler (write) which gets the statistics of a single MAC
-    for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_tx_stats.begin();
-          iter.live(); iter++) {
-
-      OdinAgent::StationStats n = iter.value();
-    
-      sa << iter.key().unparse_colon();
-        
-      sa << " packets:" << n._packets;
-      sa << " avg_rate:" << n._avg_rate; // rate in Kbps
-      sa << " avg_signal:" << n._avg_signal; // signal in dBm
-      sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
-      sa << " air_time:" << n._air_time; // time in seconds
-
-      sa << " first_received:" << n._time_first_packet; // time in long format
-      sa << " last_received:" << n._time_last_packet; // time in long format
-            
-            sa << " equipment:" << n._equipment << "\n"; // type of equipment
-    
-      stats_time = n._time_last_packet;
-      agent->_tx_stats.find(iter.key()).value() = reset_stats;
-      agent->_tx_stats.find(iter.key()).value()._time_first_packet = stats_time;
-      agent->_tx_stats.find(iter.key()).value()._time_last_packet = stats_time;
-    }  
+      for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_tx_stats.begin();
+        iter.live(); iter++)
+      {
+        OdinAgent::StationStats n = iter.value();
       
-    break;
+        sa << iter.key().unparse_colon();
+          
+        sa << " packets:" << n._packets;
+        sa << " avg_rate:" << n._avg_rate; // rate in Kbps
+        sa << " avg_signal:" << n._avg_signal; // signal in dBm
+        sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
+        sa << " air_time:" << n._air_time; // time in seconds
+
+        sa << " first_received:" << n._time_first_packet; // time in long format
+        sa << " last_received:" << n._time_last_packet; // time in long format
+              
+              sa << " equipment:" << n._equipment << "\n"; // type of equipment
+      
+        stats_time = n._time_last_packet;
+        agent->_tx_stats.find(iter.key()).value() = reset_stats;
+        agent->_tx_stats.find(iter.key()).value()._time_first_packet = stats_time;
+        agent->_tx_stats.find(iter.key()).value()._time_last_packet = stats_time;
+      }
+      break;
     }
 
     // read handler for reception statistics
@@ -2315,7 +2315,6 @@ OdinAgent::read_handler(Element *e, void *user_data)
         sa << " val " << sub.val;
         sa << "\n";
       }
-
       break;
     }
 
@@ -2332,7 +2331,7 @@ OdinAgent::read_handler(Element *e, void *user_data)
       break;
     }
     
-    // read handler scan clien
+    // read handler scan_client
     case handler_scan_client: {
     // Disable scanning
       agent->_active_client_scanning = 0;
@@ -2350,48 +2349,51 @@ OdinAgent::read_handler(Element *e, void *user_data)
       // Disable scanning
       agent->_active_AP_scanning = 0;
       // Scanning result
-      if (agent->_scanning_SSID =="*"){
+      if (agent->_scanning_SSID =="*") {
         // the controller will get the rx statistics of all the scanned STAs
         //TODO: we could perhaps add another handler (write) which gets the statistics of a single MAC
         for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_scanned_station_stats.begin();
-          iter.live(); iter++) {
+          iter.live(); iter++)
+        {
+          OdinAgent::StationStats n = iter.value();
 
-        OdinAgent::StationStats n = iter.value();
-
-        sa << iter.key().unparse_colon();
-        
-        sa << " packets:" << n._packets;
-        sa << " avg_rate:" << n._avg_rate; // rate in Kbps
-        sa << " avg_signal:" << n._avg_signal; // signal in dBm
-        sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
-        sa << " air_time:" << n._air_time; // time in seconds
-        sa << " first_received:" << n._time_first_packet; // time in long format
-        sa << " last_received:" << n._time_last_packet; // time in long format           
-        sa << " equipment:" << n._equipment << "\n"; // type of equipment
+          sa << iter.key().unparse_colon();
+          
+          sa << " packets:" << n._packets;
+          sa << " avg_rate:" << n._avg_rate; // rate in Kbps
+          sa << " avg_signal:" << n._avg_signal; // signal in dBm
+          sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
+          sa << " air_time:" << n._air_time; // time in seconds
+          sa << " first_received:" << n._time_first_packet; // time in long format
+          sa << " last_received:" << n._time_last_packet; // time in long format           
+          sa << " equipment:" << n._equipment << "\n"; // type of equipment
+        }
       }
-    }
-    else {
-      // the controller is scanning for a specific SSID
-       for (Vector<OdinAgent::APScanning>::const_iterator iter = agent->_APScanning_list.begin();
-           iter != agent->_APScanning_list.end(); iter++) {      
+      else {
+        // the controller is scanning for a specific SSID
+        for (Vector<OdinAgent::APScanning>::const_iterator iter = agent->_APScanning_list.begin();
+          iter != agent->_APScanning_list.end(); iter++)
+        {      
             OdinAgent::APScanning APscan = *iter;
             sa << APscan.bssid.unparse_colon();
             sa << " avg_signal:" << APscan.avg_signal << "\n"; // signal in dBm
-       } 
-        }
+        } 
+      }
    
-   if (agent->_debug_level % 10 > 0)
-            fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending AP scanning values \n");
-     break;
+      if (agent->_debug_level % 10 > 0)
+        fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending AP scanning values \n");
+      break;
     }
 
     // read handler scanning_flags
     case handler_scanning_flags: { 
-    sa << agent->_active_client_scanning << " " << agent->_active_AP_scanning << " " << agent->_active_measurement_beacon << "\n";;
-    if (agent->_debug_level % 10 > 0)
-    fprintf(stderr, "[Odinagent.cc] ########### Read scanning flags --> ClientScanningFlag: %i   APScanningFlag: %i    measurementBeaconFlag: %i\n", agent->_active_client_scanning, agent->_active_AP_scanning, agent->_active_measurement_beacon);
+      sa << agent->_active_client_scanning << " " << agent->_active_AP_scanning << " " << agent->_active_measurement_beacon << "\n";;
+      if (agent->_debug_level % 10 > 0)
+        fprintf(stderr, "[Odinagent.cc] ########### Read scanning flags --> ClientScanningFlag: %i   APScanningFlag: %i    measurementBeaconFlag: %i\n", agent->_active_client_scanning, agent->_active_AP_scanning, agent->_active_measurement_beacon);
       break;
     }
+
+    // read handler txpower
     case handler_txpower: {
       sa << agent->_tx_power << "\n";
       break;
@@ -2399,21 +2401,23 @@ OdinAgent::read_handler(Element *e, void *user_data)
 
     // read handler sta_rssi
     case handler_sta_rssi: {
-    // Disable scanning
-     agent->_active_AP_scanning = 0;
-     // Scanning result
-     for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_scanned_station_stats.begin();iter.live(); iter++) {
-      OdinAgent::StationStats n = iter.value();
-      if(n._equipment=="STA"){
-       sa << iter.key().unparse_colon();
-       double rssi = floor(n._avg_signal*100 + 0.5)/100;
-       sa << " " << rssi << "\n"; // signal in dBm
+      // Disable scanning
+      agent->_active_AP_scanning = 0;
+      // Scanning result
+      for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_scanned_station_stats.begin();iter.live(); iter++)
+      {
+        OdinAgent::StationStats n = iter.value();
+        if(n._equipment=="STA"){
+          sa << iter.key().unparse_colon();
+          double rssi = floor(n._avg_signal*100 + 0.5)/100;
+          sa << " " << rssi << "\n"; // signal in dBm
+        }
       }
-     }
 
-   if (agent->_debug_level % 10 > 0)
-            fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending AP scanning values \n");
-     break;
+      if (agent->_debug_level % 10 > 0)
+        fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending AP scanning values \n");
+
+      break;
     }
   }
 
