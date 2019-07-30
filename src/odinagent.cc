@@ -2374,22 +2374,25 @@ OdinAgent::read_handler(Element *e, void *user_data)
         for (Vector<OdinAgent::APScanning>::const_iterator iter = agent->_APScanning_list.begin();
           iter != agent->_APScanning_list.end(); iter++)
         {      
-            OdinAgent::APScanning APscan = *iter;
-            sa << APscan.bssid.unparse_colon();
-            sa << " avg_signal:" << APscan.avg_signal << "\n"; // signal in dBm
+          OdinAgent::APScanning APscan = *iter;
+          sa << APscan.bssid.unparse_colon();
+          sa << " avg_signal:" << APscan.avg_signal << "\n"; // signal in dBm
         } 
       }
    
       if (agent->_debug_level % 10 > 0)
         fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending AP scanning values \n");
+
       break;
     }
 
     // read handler scanning_flags
     case handler_scanning_flags: { 
       sa << agent->_active_client_scanning << " " << agent->_active_AP_scanning << " " << agent->_active_measurement_beacon << "\n";;
+
       if (agent->_debug_level % 10 > 0)
         fprintf(stderr, "[Odinagent.cc] ########### Read scanning flags --> ClientScanningFlag: %i   APScanningFlag: %i    measurementBeaconFlag: %i\n", agent->_active_client_scanning, agent->_active_AP_scanning, agent->_active_measurement_beacon);
+      
       break;
     }
 
